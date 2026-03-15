@@ -1,0 +1,85 @@
+---
+title: "Scaffolding"
+description: "Get started by automatically creating build metadata."
+---
+
+`buildcharts init` scaffolds the files that BuildCharts needs to generate a Bake plan.
+
+## What scaffolding means in BuildCharts
+
+Scaffolding is the step where BuildCharts inspects a repository, infers a reasonable starting build model, and writes the metadata files for you.
+
+At a high level, the goal is to:
+- find recognizable project files
+- infer which build stage types the repository needs
+- generate a starter `build.yml`
+- generate a matching `charts/buildcharts/Chart.yaml`
+
+You can think of this as automatic stage wiring. Instead of starting from an empty config, BuildCharts looks at the repository shape and scaffolds the most likely target types for each project.
+
+<Note>
+  The current implementation supports .NET repositories only. Support for additional repository types is not yet available.
+</Note>
+
+## How detection works
+
+BuildCharts is file-type driven. It detects the repository type first, then applies language-specific scaffolding rules.
+
+For .NET, it detects:
+
+| Signal | What it identifies |
+|---|---|
+| `.sln` or `.slnx` file | Supported .NET solution |
+| `Microsoft.NET.Test.Sdk`, `xunit`, or `nunit` references | Test projects |
+| `<PackageId>` or `<GeneratePackageOnBuild>true</GeneratePackageOnBuild>` | NuGet package projects |
+| Local `Dockerfile` in a project folder | Docker targets |
+| `global.json` or target frameworks | .NET SDK version |
+
+For .NET repositories, the generated stages are based on the [buildcharts/dotnet](https://github.com/buildcharts/charts/tree/main/dotnet) chart set.
+
+## What it creates
+
+In a supported .NET repository, `buildcharts init` creates:
+
+<Steps>
+  <Step title="build.yml">
+    The root metadata file that describes what your repository should build. Includes `version: v1beta`, `VERSION` and `COMMIT` variables, and one or more targets inferred from the repository.
+  </Step>
+  <Step title="charts/buildcharts/Chart.yaml">
+    Maps default aliases — `build`, `test`, `nuget`, `docker` — to OCI-hosted charts.
+  </Step>
+  <Step title=".github/workflows/buildcharts.yml">
+    A GitHub Actions workflow, created only when the repository remote points to GitHub.
+  </Step>
+</Steps>
+
+## What the generated `build.yml` looks like
+
+The scaffolded `build.yml` includes:
+- `version: v1beta`
+- `VERSION` and `COMMIT` variables
+- one `build` target for the solution
+- additional `test`, `nuget`, or `docker` targets when matching projects are found
+
+BuildCharts does not just detect that a repository is .NET — it also tries to map each discovered file to the correct stage type automatically.
+
+## Typical flow
+
+```bash
+buildcharts init
+buildcharts update
+buildcharts generate
+docker buildx bake --file .buildcharts/docker-bake.hcl
+```
+
+<CardGroup cols={3}>
+  <Card title="Install" icon="download" href="/install">
+    Install the BuildCharts CLI.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    End-to-end walkthrough for a .NET repository.
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    All available commands and flags.
+  </Card>
+</CardGroup>

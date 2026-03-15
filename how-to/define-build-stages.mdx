@@ -1,0 +1,140 @@
+---
+title: "Define build stages"
+description: "Model build, test, package, and image stages with BuildCharts target definitions."
+---
+
+Use `targets` in `build.yml` to describe the stages BuildCharts should generate.
+
+## Start with one build stage
+
+Every `build.yml` must contain exactly one target with `type: build`.
+
+```yaml
+targets:
+  buildcharts.sln:
+    type: build
+    with:
+      base: mcr.microsoft.com/dotnet/sdk:10.0
+```
+
+<Warning>
+BuildCharts validates this rule during `buildcharts generate`. A missing or duplicate `build` target causes generation to fail.
+</Warning>
+
+## Add more stages to a project
+
+A project can declare multiple stages for the same source path using a sequence:
+
+```yaml
+targets:
+  src/App/App.csproj:
+    - type: build
+      with:
+        base: mcr.microsoft.com/dotnet/sdk:10.0
+    - type: test
+      with:
+        base: mcr.microsoft.com/dotnet/sdk:10.0
+    - type: docker
+      with:
+        base: mcr.microsoft.com/dotnet/runtime:10.0
+        tags: ["docker.io/example/app:${VERSION}-${COMMIT}"]
+```
+
+<Note>
+Each `type` must match an alias declared in `charts/buildcharts/Chart.yaml`. See [Charts](/charts) for how aliases are defined.
+</Note>
+
+## Use built-in target variables
+
+Every generated target gets a small set of built-in build args automatically.
+
+For example:
+
+```yaml
+targets:
+  src/MyApp/MyApp.csproj:
+    type: build
+```
+
+BuildCharts injects:
+
+| Variable | Meaning |
+| --- | --- |
+| `BUILDCHARTS_SRC` | The target source path, for example `src/MyApp/MyApp.csproj` |
+| `BUILDCHARTS_TYPE` | The generated target type, for example `build` |
+
+Charts can use these variables inside their Dockerfiles and build logic. `BUILDCHARTS_SRC` lets a chart know which source entry it is building, and `BUILDCHARTS_TYPE` identifies the resolved stage type behind the chart alias.
+
+## Reuse one `with` block across multiple stages
+
+If stages share the same configuration, use `type: [build, test]` to avoid repeating the `with` block:
+
+```yaml
+targets:
+  src/App/App.csproj:
+    type: [build, test]
+    with:
+      base: mcr.microsoft.com/dotnet/sdk:10.0
+```
+
+BuildCharts expands that into two stage definitions internally.
+
+## Pass stage-specific settings
+
+The current generator recognizes these keys under `with`:
+
+| Key | What it controls |
+| --- | --- |
+| `base` | Named `base` image context |
+| `tags` | Image tags for `docker` stages |
+| `dockerfile` | Override the chart Dockerfile path |
+| `allow` | BuildKit entitlements |
+| `args` | Build args passed into the chart |
+
+Example with multiple stages and stage-specific settings:
+
+```yaml
+targets:
+  src/Library/Library.csproj:
+    - type: nuget
+      with:
+        args:
+          SOURCELINK_STRICT: 0
+    - type: docker
+      with:
+        base: mcr.microsoft.com/dotnet/runtime:10.0
+        dockerfile: ./Dockerfile
+        allow: ["network.host"]
+        tags: ["docker.io/example/library:${VERSION}-${COMMIT}"]
+```
+
+## Expand a stage with a matrix
+
+Use `types` when every target of the same type should fan out across a matrix:
+
+```yaml
+types:
+  docker:
+    matrix:
+      platform: ["linux/amd64", "linux/arm64"]
+```
+
+That exposes `PLATFORM` as a build arg in the generated Bake target.
+
+<Tip>
+Matrix expansion is useful for building multi-platform images without duplicating target definitions for each platform.
+</Tip>
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Charts" href="/charts" icon="package">
+    How chart aliases map to stage types in `Chart.yaml`.
+  </Card>
+  <Card title="Using outputs" href="/how-to/using-outputs" icon="arrow-up-from-bracket">
+    How to capture and consume build artifacts from generated stages.
+  </Card>
+  <Card title="Handle dependencies" href="/how-to/handle-dependencies" icon="link">
+    How to wire stage dependencies using Bake target contexts.
+  </Card>
+</CardGroup>

@@ -1,80 +1,199 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "dotnet"
+description: "Get started with BuildCharts in .NET repositories using the built-in chart set."
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+- Docker with `buildx`
+- BuildCharts [installed](/install) locally or globally
+- A repository root that contains a `.sln` or `.slnx` file if you want to use `buildcharts init`
 
-### Step 1: Set up your local environment
+## Scaffold a repository
+
+Run `buildcharts init` from the repository root:
+
+```bash
+buildcharts init
+```
+
+In a .NET repository, this command:
+
+- Creates `build.yml`
+- Creates `charts/buildcharts/Chart.yaml`
+- Creates `.github/workflows/buildcharts.yml` when the Git remote points to GitHub
+
+<Note>
+  `init` currently supports .NET repositories only.
+</Note>
+
+## Use the built-in .NET charts
+
+BuildCharts ships with first-class .NET charts for common stage types. These are a practical starting point when you want working defaults before you introduce your own chart ecosystem.
+
+The built-in .NET chart set is documented at [buildcharts/charts/dotnet](https://github.com/buildcharts/charts/tree/main/dotnet).
+
+The shipped Dockerfiles cover the common .NET workflows:
+
+| Chart type | What it runs |
+|---|---|
+| `build` | `dotnet build` |
+| `test` | `dotnet test` and prepares test artifacts |
+| `nuget` | `dotnet pack` and prepares package output |
+| `publish` | `dotnet publish` |
+| `docker` | Publishes the app and assembles the runtime image |
+
+These charts are implemented as reusable Dockerfiles behind the chart aliases you reference from `build.yml`.
+
+## Dependency chart
+
+The `charts/buildcharts/Chart.yaml` file maps target aliases in `build.yml` to the built-in .NET charts:
+
+```yaml charts/buildcharts/Chart.yaml
+apiVersion: v2
+name: buildcharts
+version: 0.0.1
+description: A meta-chart to define build pipeline targets and templates
+type: application
+
+dependencies:
+  - name: dotnet-build
+    alias: build
+    version: 0.0.1
+    repository: oci://registry-1.docker.io/buildcharts
+
+  - name: dotnet-docker
+    alias: docker
+    version: 0.0.1
+    repository: oci://registry-1.docker.io/buildcharts
+
+  - name: dotnet-nuget
+    alias: nuget
+    version: 0.0.1
+    repository: oci://registry-1.docker.io/buildcharts
+
+  - name: dotnet-publish
+    alias: publish
+    version: 0.0.1
+    repository: oci://registry-1.docker.io/buildcharts
+
+  - name: dotnet-test
+    alias: test
+    version: 0.0.1
+    repository: oci://registry-1.docker.io/buildcharts
+```
+
+## Review the generated metadata
+
+The scaffolded `build.yml` follows this shape:
+
+```yaml build.yml
+version: v1beta
+
+variables:
+  - VERSION
+  - COMMIT
+
+targets:
+  buildcharts.sln:
+    - type: build
+      with:
+        base: mcr.microsoft.com/dotnet/sdk:10.0
+
+    - type: docker
+      with:
+        base: mcr.microsoft.com/dotnet/runtime:10.0
+        tags: ["docker.io/eddietisma/dotnet-docker:${VERSION}-${COMMIT}"]
+```
+
+You must define exactly one `build` target somewhere in `targets`.
+
+You can also put `build` and `test` directly on the solution target. This works well for .NET because `dotnet build` and `dotnet test` can run directly against a solution:
+
+```yaml build.yml
+targets:
+  buildcharts.sln:
+    type: [build, test]
+    with:
+      base: mcr.microsoft.com/dotnet/sdk:10.0
+```
+
+This shifts test parallelization to `dotnet test`, which then delegates to the test framework and runner (xUnit, NUnit, MSTest, and so on).
 
 <AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
+  <Accordion title="Build and test target strategy trade-offs">
+    There are two models for placing `build` and `test` targets:
+
+    - **Solution-level `test`** — keeps config simpler and matches normal .NET workflows
+    - **Separate test targets** — lets Docker Bake parallelize more work across targets and may benefit differently from Docker layer caching
+
+    Which model is faster depends on your solution shape, test layout, hardware, number of tests, and how test assemblies are distributed. Benchmark both if build time matters.
+
+    > From [.NET 9](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-9/sdk#run-tests-in-parallel), the same test project can run across different target frameworks in parallel through MSBuild.
   </Accordion>
 </AccordionGroup>
 
-### Step 2: Deploy your changes
+## Create a lock file
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+`buildcharts generate` works without `charts/buildcharts/Chart.lock`, but running `buildcharts update` gives you pinned chart digests and lets `generate` detect drift.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+```bash
+buildcharts update
+```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Generate and run the plan
 
-### Step 3: Go live
+Set the required variables and generate the Bake plan, then execute it with Docker Buildx:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<CodeGroup>
+
+```bash bash
+export VERSION=1.0.0
+export COMMIT=$(git rev-parse HEAD)
+
+buildcharts generate
+docker buildx bake --file .buildcharts/docker-bake.hcl
+```
+
+```powershell powershell
+$env:VERSION = "1.0.0"
+$env:COMMIT = (git rev-parse HEAD)
+
+buildcharts generate
+docker buildx bake --file .buildcharts/docker-bake.hcl
+```
+
+</CodeGroup>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="How it works" icon="sitemap" href="/guides/how-it-works">
+    Learn how the generation flow works end to end.
+  </Card>
+  <Card title="GitHub Actions" icon="github" href="/guides/github-actions">
+    Configure a CI workflow with GitHub Actions.
+  </Card>
+  <Card title="Metadata" icon="file-lines" href="/core-features/metadata">
+    Understand the `build.yml` schema in detail.
+  </Card>
+  <Card title="Lock files" icon="lock" href="/core-features/lock-files">
+    Pin chart digests for reproducible builds.
+  </Card>
+  <Card title="Plugins" icon="puzzle-piece" href="/core-features/plugins">
+    Enable built-in plugins for common ecosystems.
+  </Card>
+  <Card title="Install" icon="terminal" href="/install">
+    Install or update the BuildCharts CLI.
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Read more
+
+- [Azure DevOps publish test results task](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/publish-test-results-v2?view=azure-pipelinesl#docker)
+- [.NET `ContinuousIntegrationBuild`](https://learn.microsoft.com/en-us/dotnet/core/project-sdk/msbuild-props#continuousintegrationbuild)
+- [.NET Source Link guidance](https://learn.microsoft.com/en-us/dotnet/standard/library-guidance/sourcelink)
+- [Microsoft Artifacts Credential Provider](https://github.com/microsoft/artifacts-credprovider)
+- [dotnet/dotnet-docker](https://github.com/dotnet/dotnet-docker/blob/main/README.md)
+- [NuGet credentials in dotnet-docker](https://github.com/dotnet/dotnet-docker/blob/main/documentation/scenarios/nuget-credentials.md)
+- [Minimal git repository metadata for Source Link](https://github.com/dotnet/sourcelink/tree/main/docs#minimal-git-repository-metadata)

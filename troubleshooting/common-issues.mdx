@@ -1,0 +1,130 @@
+---
+title: "Common issues"
+description: "Diagnose the most common BuildCharts setup, validation, and generation failures."
+---
+
+This page covers the most common problems you can hit when running `buildcharts`.
+
+<AccordionGroup>
+  <Accordion title="buildcharts init says the project type is unknown" icon="circle-question">
+    `init` currently supports .NET repositories only and expects a `.sln` or `.slnx` file.
+
+    Check that:
+
+    - You are running the command from the repository root.
+    - The repository contains a solution file.
+  </Accordion>
+
+  <Accordion title="buildcharts generate cannot find charts/buildcharts/Chart.yaml" icon="file-circle-xmark">
+    BuildCharts expects to run from the repository root.
+
+    **To fix:**
+
+    - Run the command from the repo root.
+    - Or scaffold the repo first:
+
+    ```bash
+    buildcharts init
+    ```
+  </Accordion>
+
+  <Accordion title="Lock file is out of sync" icon="lock-open">
+    This happens when `charts/buildcharts/Chart.lock` no longer matches `charts/buildcharts/Chart.yaml` or the current registry digests.
+
+    **To fix**, run:
+
+    ```bash
+    buildcharts update
+    ```
+
+    If you intentionally want to skip lock validation for one run:
+
+    ```bash
+    buildcharts generate --ignore-lock
+    ```
+
+    <Warning>
+      Using `--ignore-lock` bypasses drift detection. Only use it when you are sure the lock file mismatch is expected.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="buildcharts generate says there is no build target" icon="crosshairs">
+    Every `build.yml` must contain exactly one target with `type: build`.
+
+    Check that:
+
+    - You have one and only one `build` target.
+    - The target type is spelled correctly.
+  </Accordion>
+
+  <Accordion title="Target type is unknown" icon="tag">
+    Each target `type` in `build.yml` must match an alias in `charts/buildcharts/Chart.yaml`.
+
+    For example, if `build.yml` uses `type: test`, the alias `test` must be defined in `Chart.yaml`:
+
+    ```yaml
+    dependencies:
+      - name: dotnet-test
+        alias: test
+        version: 0.0.1
+        repository: oci://registry-1.docker.io/buildcharts
+    ```
+
+    <Tip>
+      The `alias` field in `Chart.yaml` is what BuildCharts matches against the `type` value in `build.yml`.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="buildcharts summary cannot find Docker build history" icon="clock-rotate-left">
+    `buildcharts summary` uses the latest Docker Buildx history. It only works after you have run a Bake build.
+
+    **To fix**, run the commands in order:
+
+    ```bash
+    buildcharts generate
+    docker buildx bake --file .buildcharts/docker-bake.hcl
+    buildcharts summary
+    ```
+  </Accordion>
+
+  <Accordion title="--use-inline-dockerfiles fails with a missing Dockerfile" icon="file-code">
+    When you use `buildcharts generate --use-inline-dockerfiles`, BuildCharts expects the pulled chart Dockerfiles to exist under `.buildcharts/<chart-name>/Dockerfile`.
+
+    **To fix:**
+
+    - Rerun `buildcharts generate`.
+    - Verify the chart pull succeeded.
+    - Verify the referenced chart alias exists in `Chart.yaml`.
+  </Accordion>
+
+  <Accordion title="Registry authentication failures" icon="key">
+    `pull`, `update`, and `generate` use Docker credentials from:
+
+    - `DOCKER_CONFIG/config.json`
+    - `~/.docker/config.json`
+
+    If your OCI registry is private, authenticate with Docker before running BuildCharts:
+
+    ```bash
+    docker login registry-1.docker.io
+    ```
+
+    <Note>
+      For CI environments, set `DOCKER_CONFIG` to point to a directory containing a pre-populated `config.json` with your registry credentials.
+    </Note>
+  </Accordion>
+</AccordionGroup>
+
+## Related pages
+
+<CardGroup cols={3}>
+  <Card title="Use buildx history" icon="magnifying-glass" href="/troubleshooting/buildx-history">
+    Inspect build runs and replay logs with Docker Buildx history.
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    Full reference for all BuildCharts commands.
+  </Card>
+  <Card title="Generate" icon="gear" href="/core-features/generate">
+    How BuildCharts generates your bake plan.
+  </Card>
+</CardGroup>

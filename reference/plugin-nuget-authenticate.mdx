@@ -1,0 +1,105 @@
+---
+title: "NuGetAuthenticate@v1"
+description: "Inject Azure Artifacts credentials into generated builds with NuGetAuthenticate@v1."
+---
+
+The `NuGetAuthenticate@v1` plugin configures NuGet tooling to authenticate with Azure Artifacts and other NuGet repositories during `buildcharts generate`. It mirrors the behaviour of [NuGetAuthenticate@1](https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/nuget-authenticate-v1?view=azure-pipelines) in Azure Pipelines.
+
+With this plugin enabled, `dotnet restore` and NuGet push operations can authenticate against private Azure Artifacts feeds without any manual credential management in your Dockerfiles.
+
+## Enable the plugin
+
+Add `NuGetAuthenticate@v1` to the `plugins` list in your `build.yml`:
+
+```yaml build.yml
+plugins:
+  - NuGetAuthenticate@v1
+```
+
+Then run `buildcharts generate`. The plugin automatically injects the necessary secrets and patches `docker-bake.hcl` so that authenticated NuGet operations work inside your Docker builds.
+
+## What it does
+
+When `buildcharts generate` runs, the plugin:
+
+<Steps>
+  <Step title="Enumerate NuGet sources">
+    Runs `dotnet nuget list source --format short` to discover all configured NuGet sources.
+  </Step>
+  <Step title="Filter to Azure-hosted feeds">
+    Keeps only sources whose host ends with `pkgs.dev.azure.com` or `pkgs.visualstudio.com`.
+  </Step>
+  <Step title="Resolve credentials">
+    Prefers existing environment credentials when available. If none are found, installs the [Microsoft Artifacts Credential Provider](https://github.com/microsoft/artifacts-credprovider) under `.buildcharts/plugins/NuGetAuthenticate@v1`.
+  </Step>
+  <Step title="Write secret files">
+    Writes secret files under `.buildcharts/secrets`, including `ARTIFACTS_CREDENTIALPROVIDER_EXTERNAL_FEED_ENDPOINTS` — a JSON payload that describes each endpoint and its associated credentials.
+  </Step>
+  <Step title="Patch docker-bake.hcl">
+    Patches the generated `docker-bake.hcl` so the credential secrets are mounted into the Docker build context.
+  </Step>
+</Steps>
+
+<Note>
+  The plugin only acts on Azure DevOps-hosted NuGet feeds. If no matching sources are found, the plugin exits without modifying `docker-bake.hcl`.
+</Note>
+
+## Environment variables
+
+The plugin reads from the following environment variables to resolve credentials. Provide at least one of these in your build environment.
+
+| Variable | Description |
+| --- | --- |
+| `ARTIFACTS_CREDENTIALPROVIDER_EXTERNAL_FEED_ENDPOINTS` | JSON payload describing endpoints and credentials. Written by the plugin when credentials are derived from other variables. |
+| `VSS_NUGET_EXTERNAL_FEED_ENDPOINTS` | Alternative JSON feed endpoint payload used by older credential provider versions. |
+| `ARTIFACTS_CREDENTIALPROVIDER_ACCESSTOKEN` | Personal access token for the Artifacts Credential Provider. |
+| `VSS_NUGET_ACCESSTOKEN` | Legacy access token variable used by some Azure DevOps configurations. |
+| `SYSTEM_ACCESSTOKEN` | The Azure Pipelines job token, available automatically in Azure Pipelines jobs. |
+| `AZURE_ARTIFACTS_ENV_ACCESS_TOKEN` | Access token variable used in some Azure Artifacts environments. |
+
+<Tip>
+  In Azure Pipelines, set `env: SYSTEM_ACCESSTOKEN: $(System.AccessToken)` on your build step to pass the pipeline token through automatically.
+</Tip>
+
+## Example `build.yml`
+
+The following example enables the plugin for a .NET repo that restores packages from a private Azure Artifacts feed:
+
+```yaml build.yml
+apiVersion: buildcharts/v1
+kind: Build
+metadata:
+  name: my-dotnet-app
+spec:
+  chart: registry.example.com/charts/dotnet:1.0.0
+  plugins:
+    - NuGetAuthenticate@v1
+```
+
+## Use cases
+
+<CardGroup cols={2}>
+  <Card title="Private NuGet feeds" icon="lock">
+    Restore packages from a private NuGet feed hosted on Azure Artifacts without embedding credentials in your Dockerfiles.
+  </Card>
+  <Card title="Azure Pipelines builds" icon="circle-play">
+    Pass the pipeline job token via `SYSTEM_ACCESSTOKEN` and let the plugin handle credential injection automatically.
+  </Card>
+</CardGroup>
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Plugins overview" icon="puzzle-piece" href="/core-features/plugins">
+    Learn how plugins extend the build pipeline.
+  </Card>
+  <Card title="TestcontainersDinD@v1" icon="docker" href="/reference/plugin-testcontainers-dind">
+    Set up an isolated Docker daemon for Testcontainers-based builds.
+  </Card>
+  <Card title="CLI reference" icon="rectangle-terminal" href="/reference/cli">
+    Full reference for all `buildcharts` commands and flags.
+  </Card>
+  <Card title="buildcharts generate" icon="gear" href="/core-features/generate">
+    How `generate` validates metadata, runs plugins, and writes `docker-bake.hcl`.
+  </Card>
+</CardGroup>

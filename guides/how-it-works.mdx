@@ -1,0 +1,126 @@
+---
+title: "How it works"
+description: "Inputs, validation rules, generated files, and Bake outputs in the BuildCharts flow."
+---
+
+`buildcharts` turns repo-local metadata into a `docker buildx bake` plan. This page traces the full pipeline from your source files to the generated HCL.
+
+## Inputs
+
+### `build.yml`
+
+This file defines variables, plugins, targets, and optional type matrices.
+
+Two rules apply on every run:
+
+- You must define exactly one `build` target.
+- Every target `type` must match an alias declared in `charts/buildcharts/Chart.yaml`.
+
+### `charts/buildcharts/Chart.yaml`
+
+This file maps each target alias to a versioned OCI chart.
+
+```yaml
+dependencies:
+  - name: dotnet-build
+    alias: build
+    version: 0.0.1
+    repository: oci://registry-1.docker.io/buildcharts
+```
+
+### `charts/buildcharts/Chart.lock`
+
+This file is optional. When it exists, `buildcharts generate` validates it against `Chart.yaml` and the registry digest unless you pass `--ignore-lock`.
+
+<Tip>Commit `Chart.lock` to your repository to pin chart versions and get reproducible builds across machines and CI runs.</Tip>
+
+## What `buildcharts generate` does
+
+<Steps>
+  <Step title="Clean previous output">
+    Removes `.buildcharts` from the previous run so the output directory starts clean.
+  </Step>
+  <Step title="Read inputs">
+    Reads `build.yml`, `Chart.yaml`, and `Chart.lock` if it exists.
+  </Step>
+  <Step title="Validate">
+    Validates the build target count, target type aliases, and lock file state.
+  </Step>
+  <Step title="Pull chart artifacts">
+    Pulls chart artifacts from OCI registries into `.buildcharts`.
+  </Step>
+  <Step title="Run plugins">
+    Executes each plugin listed in the `plugins` section of `build.yml`.
+  </Step>
+  <Step title="Write the Bake plan">
+    Writes `.buildcharts/docker-bake.hcl` — the file you pass to `docker buildx bake`.
+  </Step>
+</Steps>
+
+<Note>If you pass `--use-inline-dockerfiles`, the generated HCL embeds chart Dockerfiles directly instead of referencing files under `.buildcharts/<chart-name>/Dockerfile`.</Note>
+
+## What `docker buildx bake` does next
+
+BuildCharts generates one Bake target per type. You can run the default group or a single type:
+
+```bash
+# Run all targets
+docker buildx bake --file .buildcharts/docker-bake.hcl
+
+# Run only the test target
+docker buildx bake --file .buildcharts/docker-bake.hcl test
+```
+
+The generated outputs depend on the target type:
+
+| Target type | Output mode |
+| --- | --- |
+| `build` | `type=cacheonly` |
+| `docker` | `type=docker` |
+| All other types | `.buildcharts/output/<type>` |
+
+That export layout is why the samples can read test results from `.buildcharts/output/test` and NuGet packages from `.buildcharts/output/nuget`.
+
+### Why Bake helps
+
+[Bake](https://docs.docker.com/build/bake/) is a strong execution layer for CI/CD and monorepos because it can:
+
+- Parallelize independent targets — for example, building multiple services, running tests, and packaging in one run.
+- Reduce duplicated context transfers across targets, which matters on remote builders and in CI.
+- Reuse BuildKit caching and cache exports/imports to reduce build times across repeated runs.
+- Model complex build graphs declaratively with groups, targets, matrices, and `--set` overrides.
+
+This helps teams maintain consistent build execution across dozens or hundreds of services without copy-pasting and drifting CI configuration.
+
+## Scope
+
+BuildCharts is a build-plan generator. It does not replace your CI/CD platform.
+
+BuildCharts also does not:
+
+- Manage deployments or runtime configuration.
+- Host secrets or artifacts for you.
+- Package or publish charts/templates for you.
+- Provide a built-in signing or trust system for charts.
+
+## When it fits
+
+BuildCharts tends to fit well when you:
+
+- Already use Docker and BuildKit for builds.
+- Want to centralize build logic across many repositories.
+- Want the same build plan to run locally and in CI.
+- Benefit from parallel builds and BuildKit caching.
+
+## When it doesn't
+
+<Warning>BuildCharts may be a poor fit if you cannot run Docker daemons or BuildKit in your environment, have highly bespoke build steps that do not map well to Docker-based stages, or have very constrained runners where Bake parallelism and caching backfires.</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Examples" icon="square-code" href="/guides/examples">
+    See real-world `build.yml` configurations for common target types.
+  </Card>
+  <Card title="GitHub Actions" icon="github" href="/guides/github-actions">
+    Run BuildCharts in CI with the generated workflow.
+  </Card>
+</CardGroup>

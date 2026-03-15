@@ -1,0 +1,54 @@
+---
+title: "Examples"
+description: "Sample repositories for common BuildCharts targets and plugins."
+---
+
+The source repository includes small samples that mirror the supported target shapes. Use them as a starting point when you need a known-good layout for a target type or plugin.
+
+## Sample projects
+
+<CardGroup cols={2}>
+  <Card title="dotnet-docker" icon="docker" href="https://github.com/eddietisma/buildcharts/tree/main/samples/dotnet-docker">
+    Build a .NET app and export a Docker image.
+  </Card>
+  <Card title="dotnet-test" icon="flask-conical" href="https://github.com/eddietisma/buildcharts/tree/main/samples/dotnet-test">
+    Run tests and export `trx` files for test results.
+  </Card>
+  <Card title="dotnet-nuget" icon="package" href="https://github.com/eddietisma/buildcharts/tree/main/samples/dotnet-nuget">
+    Pack a library and export `.nupkg` files.
+  </Card>
+  <Card title="dotnet-testcontainers" icon="container" href="https://github.com/eddietisma/buildcharts/tree/main/samples/dotnet-testcontainers">
+    Use `TestcontainersDinD@v1` for container-based integration tests.
+  </Card>
+</CardGroup>
+
+## Common run pattern
+
+Each sample follows the same three-step flow:
+
+<Steps>
+  <Step title="Restore tools">
+    ```bash
+    dotnet tool restore
+    ```
+  </Step>
+  <Step title="Generate the Bake plan">
+    ```bash
+    buildcharts generate
+    ```
+  </Step>
+  <Step title="Run the build">
+    ```bash
+    docker buildx bake --file .buildcharts/docker-bake.hcl --no-cache
+    ```
+  </Step>
+</Steps>
+
+<CardGroup cols={2}>
+  <Card title="How it works" icon="circle-info" href="/guides/how-it-works">
+    Understand the full generation pipeline.
+  </Card>
+  <Card title="GitHub Actions" icon="github" href="/guides/github-actions">
+    Run these samples in CI.
+  </Card>
+</CardGroup>

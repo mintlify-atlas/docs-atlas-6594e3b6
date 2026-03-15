@@ -1,0 +1,74 @@
+---
+title: "Using outputs"
+description: "Export artifacts with Bake and consume them from .buildcharts/output."
+---
+
+Charts can export artifacts by writing files into `/output` inside the Dockerfile. The generated Bake plan then uses a local output to copy that content to `.buildcharts/output/<type>` on the host during `docker buildx bake`.
+
+## Output behavior by stage type
+
+Different stage types produce different kinds of output:
+
+| Stage type | Output behavior |
+| --- | --- |
+| `build` | `type=cacheonly` |
+| `docker` | `type=docker` |
+| Any other type | Export to `.buildcharts/output/<type>` |
+
+<Note>
+`test`, `nuget`, and any custom non-docker type export local files under `.buildcharts/output`.
+</Note>
+
+## How local exports work
+
+BuildCharts implements local outputs using Docker Buildx Bake build artifact exports.
+
+For any non-`build` and non-`docker` stage type, the generated `docker-bake.hcl` includes a local output like:
+
+```hcl
+output = [
+  "type=cacheonly,mode=max",
+  "type=local,dest=.buildcharts/output/nuget"
+]
+```
+
+`type=local` exports the filesystem contents of the target stage to a local directory. That means everything that exists in the final stage is copied to `.buildcharts/output/<type>`.
+
+<Tip>
+Charts that export artifacts typically use a final `FROM scratch` stage and copy only the artifacts into it:
+
+```dockerfile
+FROM scratch AS nuget
+COPY --from=pre-nuget /output /
+```
+
+This keeps the exported directory clean — only the artifacts you intend to export end up in `.buildcharts/output/<type>`.
+</Tip>
+
+For the underlying Docker pattern, see [Exporting build artifacts](https://docs.docker.com/guides/bake/#exporting-build-artifacts).
+
+## Work with Docker outputs
+
+`docker` stages use `type=docker`, so the image is loaded into your Docker environment instead of being exported to `.buildcharts/output/docker`.
+
+Use tags in `build.yml` so the result is easy to reference:
+
+```yaml
+targets:
+  src/App/App.csproj:
+    - type: docker
+      with:
+        base: mcr.microsoft.com/dotnet/runtime:10.0
+        tags: ["docker.io/example/app:${VERSION}-${COMMIT}"]
+```
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Define build stages" href="/how-to/define-build-stages" icon="layers">
+    How to declare targets and stage types in `build.yml`.
+  </Card>
+  <Card title="Handle dependencies" href="/how-to/handle-dependencies" icon="link">
+    How to wire stage dependencies using Bake target contexts.
+  </Card>
+</CardGroup>

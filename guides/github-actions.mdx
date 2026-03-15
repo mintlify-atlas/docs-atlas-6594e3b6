@@ -1,0 +1,89 @@
+---
+title: "GitHub Actions"
+description: "Run BuildCharts in GitHub Actions with the generated workflow and Buildx Bake."
+---
+
+`buildcharts init` creates `.github/workflows/buildcharts.yml` when the Git remote in `.git/config` points to GitHub.
+
+## Generated workflow
+
+This is the workflow template the CLI ships:
+
+```yaml .github/workflows/buildcharts.yml
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up BuildCharts
+        uses: buildcharts/setup-action@v1
+
+      - name: Generate BuildCharts
+        uses: buildcharts/generate-action@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker build and test
+        uses: docker/bake-action@v6
+        with:
+          files: .buildcharts/docker-bake.hcl
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+```
+
+<Note>
+  - `buildcharts/setup-action@v1` installs the CLI.
+  - `buildcharts/generate-action@v1` generates `.buildcharts/docker-bake.hcl`.
+  - `docker/bake-action@v6` runs the generated plan.
+</Note>
+
+## Enable caching
+
+If you run builds frequently, configure a cache backend for BuildKit. On GitHub Actions, `type=gha` is a common choice.
+
+The example below uses `docker/bake-action` to set cache options on the generated `_common` target:
+
+```yaml
+- name: Docker build and test
+  uses: docker/bake-action@v6
+  with:
+    files: .buildcharts/docker-bake.hcl
+    set: |
+      _common.cache-from=type=gha,scope=buildcharts
+      _common.cache-to=type=gha,scope=buildcharts,mode=max
+  env:
+    VERSION: ${{ github.ref_name }}
+    COMMIT: ${{ github.sha }}
+```
+
+<Tip>Read more about [BuildKit cache backends](https://docs.docker.com/build/cache/backends/) to choose the right backend for your infrastructure.</Tip>
+
+## Add a build summary
+
+`buildcharts summary` appends Markdown to `GITHUB_STEP_SUMMARY` when that environment variable is present. Add this step after Bake to get a job summary:
+
+```yaml
+- name: Build summary
+  run: buildcharts summary
+```
+
+## Working with private registries
+
+`generate`, `update`, and `pull` read Docker registry credentials from `DOCKER_CONFIG` or the default Docker config file. If your charts live in a private OCI registry, sign in before the BuildCharts steps run.
+
+<CardGroup cols={2}>
+  <Card title="How it works" icon="circle-info" href="/guides/how-it-works">
+    Understand the full generation pipeline.
+  </Card>
+  <Card title="Examples" icon="square-code" href="/guides/examples">
+    Sample `build.yml` configurations for common targets.
+  </Card>
+</CardGroup>

@@ -1,0 +1,92 @@
+---
+title: "Generate"
+description: "What buildcharts generate does and the files it produces."
+---
+
+`buildcharts generate` is the core step that turns repository metadata into an executable Docker Buildx Bake plan.
+
+## What it reads
+
+During generation, BuildCharts reads:
+- `build.yml`
+- `charts/buildcharts/Chart.yaml`
+- `charts/buildcharts/Chart.lock` if it exists
+
+## What it validates
+
+Before writing output, BuildCharts validates:
+- There is exactly one `build` target
+- Every target `type` matches a chart alias from `Chart.yaml`
+
+When `Chart.lock` exists and `--ignore-lock` is not set, `buildcharts generate` also checks:
+
+| Check | What it detects |
+|---|---|
+| Missing lock entries | A dependency in `Chart.yaml` has no matching lock entry |
+| Version mismatches | The locked version no longer matches `Chart.yaml` |
+| Orphaned lock entries | The lock file contains entries with no matching dependency |
+| Registry digest mismatches | The pulled chart digest differs from the locked digest |
+
+If the lock file is out of sync, BuildCharts stops and tells you to refresh it.
+
+<Warning>
+  If any lock validation check fails, generation stops. Run `buildcharts update` to refresh `Chart.lock` before generating again.
+</Warning>
+
+## What it does, step by step
+
+<Steps>
+  <Step title="Remove the previous output">
+    Deletes the existing `.buildcharts` folder to ensure a clean generation.
+  </Step>
+  <Step title="Pull chart artifacts">
+    Pulls chart artifacts from OCI registries into `.buildcharts`, using digest-pinned references when a lock file is present.
+  </Step>
+  <Step title="Run configured plugins">
+    Executes plugins listed in `build.yml` in order. Plugins can write additional files or patch the generated HCL.
+  </Step>
+  <Step title="Write the Bake file">
+    Writes `.buildcharts/docker-bake.hcl` from the resolved metadata and chart templates.
+  </Step>
+</Steps>
+
+## Flags
+
+| Flag | Description |
+|---|---|
+| `--use-inline-dockerfiles` | Embed Dockerfiles inline in the HCL output instead of referencing them as external files |
+| `--ignore-lock` | Skip lock file validation and pull current tags from the registry |
+| `--verbose` | Print detailed output during generation |
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `DOCKER_CONFIG` | Path to a Docker config directory used for registry authentication during chart pulls |
+
+## Main output
+
+The generated Bake file lives at:
+
+```text
+.buildcharts/docker-bake.hcl
+```
+
+Run it with:
+
+```bash
+buildcharts generate
+docker buildx bake --file .buildcharts/docker-bake.hcl
+```
+
+<CardGroup cols={3}>
+  <Card title="Metadata" icon="file-lines" href="/core-features/metadata">
+    The `build.yml` schema that drives generation.
+  </Card>
+  <Card title="Lock files" icon="lock" href="/core-features/lock-files">
+    How `Chart.lock` makes generation reproducible.
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    All available commands and flags.
+  </Card>
+</CardGroup>

@@ -1,0 +1,107 @@
+---
+title: "TestcontainersDinD@v1"
+description: "Provide an isolated Docker daemon for Testcontainers-based builds with TestcontainersDinD@v1."
+---
+
+The `TestcontainersDinD@v1` plugin provisions a dedicated Docker-in-Docker (DinD) daemon and configures Testcontainers to connect to it during build time. This gives your test stage an isolated Docker engine that is separate from the host daemon.
+
+## Enable the plugin
+
+Add `TestcontainersDinD@v1` to the `plugins` list in your `build.yml`:
+
+```yaml build.yml
+plugins:
+  - TestcontainersDinD@v1
+```
+
+When you run `buildcharts generate`, the plugin starts or reuses the DinD container, updates `.buildcharts/docker-bake.hcl`, and leaves the daemon running for reuse in subsequent builds.
+
+## What it does
+
+When `buildcharts generate` runs, the plugin:
+
+<Steps>
+  <Step title="Start the DinD container">
+    Starts a container named `buildcharts-dind` using the `docker:27-dind` image. If the container already exists with the same image, it is reused. If it exists with a different image, it is removed and recreated.
+  </Step>
+  <Step title="Configure the daemon">
+    Runs the container in privileged mode, binds port `2375`, and disables TLS so the Docker client inside your build can connect without certificate setup.
+  </Step>
+  <Step title="Patch docker-bake.hcl">
+    Patches the `test` target in the generated `docker-bake.hcl` with two additions:
+    - `TESTCONTAINERS_HOST_OVERRIDE` build arg set to the DinD container's IP address
+    - `host.docker.internal` extra host that resolves to the host gateway
+  </Step>
+  <Step title="Write debug info">
+    Writes `.buildcharts/plugins/TestcontainersDinD@v1/container_debuginfo.json` with details about the running DinD container.
+  </Step>
+</Steps>
+
+<Note>
+  If the generated Bake plan has no `test` target, the patch step is skipped and `docker-bake.hcl` is left unchanged.
+</Note>
+
+<Warning>
+  The plugin runs the DinD container in privileged mode. Make sure your build environment permits privileged containers before enabling this plugin.
+</Warning>
+
+## Environment variables
+
+| Variable | Description |
+| --- | --- |
+| `BUILDCHARTS_DIND_IMAGE` | Override the Docker image tag used for the DinD container. Defaults to `docker:27-dind`. |
+
+## Example `build.yml`
+
+The following example enables the plugin for a repo that runs integration tests using Testcontainers:
+
+```yaml build.yml
+apiVersion: buildcharts/v1
+kind: Build
+metadata:
+  name: my-java-app
+spec:
+  chart: registry.example.com/charts/java:1.0.0
+  plugins:
+    - TestcontainersDinD@v1
+```
+
+To pin the DinD daemon to a specific Docker version, set `BUILDCHARTS_DIND_IMAGE` in your environment before running `buildcharts generate`:
+
+```bash
+export BUILDCHARTS_DIND_IMAGE=docker:26-dind
+buildcharts generate
+```
+
+## Use cases
+
+<CardGroup cols={2}>
+  <Card title="Integration tests with Testcontainers" icon="flask">
+    Run Testcontainers-based integration tests inside Docker builds by pointing `TESTCONTAINERS_HOST_OVERRIDE` at an isolated DinD daemon.
+  </Card>
+  <Card title="Isolated Docker environments" icon="shield">
+    Prevent test containers from interfering with the host Docker daemon or other builds running on the same machine.
+  </Card>
+</CardGroup>
+
+## Read more
+
+- [Patterns for running tests inside a Docker container](https://java.testcontainers.org/supported_docker_environment/continuous_integration/dind_patterns/)
+- [GitHub — docker/buildx: Provide option to allow access to `/var/run/docker.sock` during build #1991](https://github.com/docker/buildx/issues/1991)
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Plugins overview" icon="puzzle-piece" href="/core-features/plugins">
+    Learn how plugins extend the build pipeline.
+  </Card>
+  <Card title="NuGetAuthenticate@v1" icon="key" href="/reference/plugin-nuget-authenticate">
+    Inject Azure Artifacts credentials into generated builds.
+  </Card>
+  <Card title="CLI reference" icon="rectangle-terminal" href="/reference/cli">
+    Full reference for all `buildcharts` commands and flags.
+  </Card>
+  <Card title="buildcharts generate" icon="gear" href="/core-features/generate">
+    How `generate` validates metadata, runs plugins, and writes `docker-bake.hcl`.
+  </Card>
+</CardGroup>

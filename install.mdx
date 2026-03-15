@@ -1,0 +1,61 @@
+---
+title: "Install"
+description: "Install the BuildCharts CLI and verify that your environment is ready."
+---
+
+## Prerequisites
+
+Before you install BuildCharts, make sure you have the following:
+
+- **Docker with `buildx`** — required at runtime to execute the generated Bake plan
+- **.NET 10 SDK** — required if you install BuildCharts as a .NET tool
+
+## Install as a global tool
+
+Installing globally makes the `buildcharts` command available in your shell from any directory.
+
+```bash
+dotnet tool install --global dotnet-buildcharts
+```
+
+## Install in a local tool manifest
+
+Use a local tool manifest when you want the repository to pin the CLI version. This is the recommended approach for team repositories and CI pipelines.
+
+<Steps>
+  <Step title="Create a tool manifest">
+    Run this command from the repository root to create a `.config/dotnet-tools.json` manifest:
+
+    ```bash
+    dotnet new tool-manifest
+    ```
+  </Step>
+  <Step title="Add BuildCharts to the manifest">
+    ```bash
+    dotnet tool install dotnet-buildcharts
+    ```
+  </Step>
+  <Step title="Restore the tool inside the repo">
+    Any developer or CI runner can now install the pinned version with:
+
+    ```bash
+    dotnet tool restore
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Committing `.config/dotnet-tools.json` to source control ensures every contributor and CI run uses the same CLI version.
+</Tip>
+
+## Verify the installation
+
+Confirm the CLI is available and check the installed version:
+
+```bash
+buildcharts version
+```
+
+<Note>
+  For build-time dependencies, offline-friendly setups, and supply-chain considerations, see [Considerations](/considerations).
+</Note>

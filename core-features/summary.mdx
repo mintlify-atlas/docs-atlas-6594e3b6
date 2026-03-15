@@ -1,0 +1,95 @@
+---
+title: "Summary"
+description: "Readable build summaries and portable Buildx records from the latest build history."
+---
+
+`buildcharts summary` turns the latest Docker Buildx history into output files you can read, upload, and inspect later.
+
+## What it does
+
+After a Bake run, `buildcharts summary`:
+- reads the latest Docker Buildx history
+- reads your `build.yml` and chart config
+- writes `.buildcharts/output/SUMMARY.md`
+- writes `.buildcharts/output/buildcharts.dockerbuild`
+
+On GitHub Actions, the command also appends the generated summary to `GITHUB_STEP_SUMMARY`.
+
+<Warning>
+  `summary` requires an existing Buildx history entry. If no build has run yet, the command fails and tells you to run a build first.
+</Warning>
+
+## Typical flow
+
+```bash
+buildcharts generate
+docker buildx bake --file .buildcharts/docker-bake.hcl
+buildcharts summary
+```
+
+## Output files
+
+### `SUMMARY.md`
+
+`.buildcharts/output/SUMMARY.md` is the readable summary output.
+
+Use it when you want:
+- a short build summary in CI artifacts
+- a markdown summary you can publish in job output
+- a simpler view than raw Buildx logs
+
+### `buildcharts.dockerbuild`
+
+`.buildcharts/output/buildcharts.dockerbuild` is an exported Buildx history bundle.
+
+Use it when you want:
+- to inspect the build later in Docker Desktop
+- to move a CI build record to another machine
+- to debug a completed build without rerunning it immediately
+
+## CI integration
+
+<Tabs>
+  <Tab title="GitHub Actions">
+    `buildcharts summary` appends the generated markdown to `GITHUB_STEP_SUMMARY` automatically when it detects the GitHub Actions environment.
+
+    No additional configuration is required — just add the step after your Bake run:
+
+    ```yaml
+    - name: Generate build plan
+      run: buildcharts generate
+
+    - name: Run build
+      run: docker buildx bake --file .buildcharts/docker-bake.hcl
+
+    - name: Export summary
+      run: buildcharts summary
+    ```
+  </Tab>
+  <Tab title="Azure DevOps">
+    When `TF_BUILD=true`, `buildcharts summary`:
+    - uploads the summary and `.dockerbuild` bundle as pipeline artifacts
+    - publishes the summary to the job output
+
+    No additional configuration is required beyond the presence of the `TF_BUILD` environment variable, which Azure DevOps sets automatically.
+  </Tab>
+</Tabs>
+
+## Why use it
+
+Summary is useful when you want BuildCharts-friendly output after the build has already completed. It gives you:
+- a stable markdown artifact
+- a portable Buildx build record
+- a cleaner handoff between build execution and troubleshooting
+
+<CardGroup cols={3}>
+  <Card title="Docker Bake" icon="docker" href="/core-features/docker-bake">
+    The execution layer that produces the build history.
+  </Card>
+  <Card title="Buildx history" icon="clock-rotate-left" href="/troubleshooting/buildx-history">
+    How to use buildx history for troubleshooting.
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    All available commands and flags.
+  </Card>
+</CardGroup>

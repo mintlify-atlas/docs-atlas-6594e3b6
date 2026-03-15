@@ -1,0 +1,188 @@
+---
+title: "CLI reference"
+description: "Shipped BuildCharts commands, options, and outputs."
+---
+
+Run `buildcharts` with no subcommand to print help. Each subcommand is described in detail below.
+
+## Command summary
+
+| Command | What it does |
+| --- | --- |
+| [`buildcharts init`](#buildcharts-init) | Scaffold `build.yml` and `charts/buildcharts/Chart.yaml` for a .NET repo |
+| [`buildcharts update`](#buildcharts-update) | Resolve OCI chart dependencies and refresh `charts/buildcharts/Chart.lock` |
+| [`buildcharts generate`](#buildcharts-generate) | Validate metadata, pull charts, run plugins, and write `.buildcharts/docker-bake.hcl` |
+| [`buildcharts pull`](#buildcharts-pull) | Download a single chart by tag or digest |
+| [`buildcharts summary`](#buildcharts-summary) | Export a summary from the latest Docker Buildx history |
+| [`buildcharts version`](#buildcharts-version) | Print tool and runtime details |
+
+---
+
+## `buildcharts init`
+
+```bash
+buildcharts init
+```
+
+`init` scans the current repository for a `.sln` or `.slnx` file and detects .NET project types from `.csproj` files. It then writes the following files:
+
+| File | Description |
+| --- | --- |
+| `build.yml` | Declarative build metadata for your repository |
+| `charts/buildcharts/Chart.yaml` | OCI chart dependency manifest |
+| `.github/workflows/buildcharts.yml` | GitHub Actions workflow (written only when the Git remote host is GitHub) |
+
+<Note>
+  `buildcharts init` currently supports .NET repositories only.
+</Note>
+
+---
+
+## `buildcharts update`
+
+```bash
+buildcharts update
+```
+
+`update` reads `charts/buildcharts/Chart.yaml`, resolves each dependency to a digest, and writes a fresh `charts/buildcharts/Chart.lock`.
+
+### Environment variables
+
+| Variable | Description |
+| --- | --- |
+| `DOCKER_CONFIG` | Override the Docker config directory used for registry authentication |
+
+---
+
+## `buildcharts generate`
+
+```bash
+buildcharts generate [--use-inline-dockerfiles] [--ignore-lock] [--verbose]
+```
+
+`generate` deletes `.buildcharts`, validates your config, pulls charts, runs plugins, and writes `.buildcharts/docker-bake.hcl`.
+
+### Options
+
+| Flag | Description |
+| --- | --- |
+| `--use-inline-dockerfiles` | Embed pulled Dockerfiles directly in `.buildcharts/docker-bake.hcl` instead of referencing them as external files |
+| `--ignore-lock` | Skip `Chart.lock` validation even if the lock file exists |
+| `--verbose` | Enable extra plugin and generator logging by setting `BUILDSCHARTS_VERBOSE=1` |
+
+### Environment variables
+
+| Variable | Description |
+| --- | --- |
+| `DOCKER_CONFIG` | Override the Docker config directory used for registry authentication |
+
+<Tip>
+  Use `--ignore-lock` during initial development when you have not yet committed a `Chart.lock` file.
+</Tip>
+
+---
+
+## `buildcharts pull`
+
+```bash
+buildcharts pull <reference> [--untar] [--untardir <DIR>] [--output <OUTPUT>]
+```
+
+`pull` downloads a single chart by OCI tag or digest.
+
+### Arguments and options
+
+| Argument / flag | Description |
+| --- | --- |
+| `<reference>` | OCI reference in the form `registry/repo:tag` or `registry/repo@sha256:...` |
+| `--untar` | Extract the downloaded chart into the current directory |
+| `--untardir <DIR>` | Extraction directory to use when `--untar` is set |
+| `--output <OUTPUT>` | Directory where the downloaded chart blob is stored |
+
+### Environment variables
+
+| Variable | Description |
+| --- | --- |
+| `DOCKER_CONFIG` | Override the Docker config directory used for registry authentication |
+
+### Examples
+
+<Tabs>
+  <Tab title="Pull by tag">
+    ```bash
+    buildcharts pull registry.example.com/charts/dotnet:1.0.0
+    ```
+  </Tab>
+  <Tab title="Pull by digest">
+    ```bash
+    buildcharts pull registry.example.com/charts/dotnet@sha256:abc123...
+    ```
+  </Tab>
+  <Tab title="Pull and extract">
+    ```bash
+    buildcharts pull registry.example.com/charts/dotnet:1.0.0 --untar --untardir ./charts
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## `buildcharts summary`
+
+```bash
+buildcharts summary
+```
+
+`summary` reads the latest Docker Buildx history and exports the following output files:
+
+| File | Description |
+| --- | --- |
+| `.buildcharts/output/SUMMARY.md` | Human-readable build summary in Markdown |
+| `.buildcharts/output/buildcharts.dockerbuild` | Structured build record for tooling |
+
+### CI integrations
+
+`summary` integrates automatically with supported CI platforms:
+
+| Platform | Behaviour |
+| --- | --- |
+| **GitHub Actions** | Appends the summary to `GITHUB_STEP_SUMMARY` when the variable is set |
+| **Azure DevOps** | Uploads artifacts and writes a job summary when `TF_BUILD=true` |
+
+<Tip>
+  Run `buildcharts summary` as a final step in your CI pipeline to publish build results without any extra configuration.
+</Tip>
+
+---
+
+## `buildcharts version`
+
+```bash
+buildcharts version
+```
+
+Prints the following details about the current installation:
+
+- BuildCharts version and build timestamp
+- OS and CPU architecture
+- CPU and memory
+- Current .NET runtime version
+
+---
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="NuGetAuthenticate@v1" icon="key" href="/reference/plugin-nuget-authenticate">
+    Inject Azure Artifacts credentials into generated builds.
+  </Card>
+  <Card title="TestcontainersDinD@v1" icon="docker" href="/reference/plugin-testcontainers-dind">
+    Set up an isolated Docker daemon for Testcontainers-based builds.
+  </Card>
+  <Card title="buildcharts generate" icon="gear" href="/core-features/generate">
+    How `generate` validates metadata, runs plugins, and writes `docker-bake.hcl`.
+  </Card>
+  <Card title="Lock files" icon="lock" href="/core-features/lock-files">
+    How `Chart.lock` pins chart digests for reproducible builds.
+  </Card>
+</CardGroup>

@@ -1,0 +1,80 @@
+---
+title: "Plugins"
+description: "Built-in plugins that extend generation before and after HCL creation."
+---
+
+Plugins hook into the `buildcharts` generation pipeline to run custom logic before and/or after the build configuration is produced. They are an extensibility point for tasks such as injecting environment secrets, generating additional output files, or performing validation.
+
+## What plugins can do
+
+Plugins can:
+- prepare external state before generation
+- write secret or debug files under `.buildcharts`
+- patch the generated `docker-bake.hcl`
+- generate additional output files
+- perform validation or environment setup
+
+## How to enable plugins
+
+Declare a top-level `plugins` list in your `build.yml`. Each entry is the name of a registered plugin. When you run `buildcharts generate`, these plugins execute in sequence.
+
+```yaml
+plugins:
+  - NuGetAuthenticate@v1
+  - TestcontainersDinD@v1
+```
+
+Plugins are executed in the order they appear in the list.
+
+<Note>
+  BuildCharts currently loads built-in plugins only. If you need a new plugin, you must extend the BuildCharts tool and ship it as part of your BuildCharts distribution.
+</Note>
+
+## Available built-in plugins
+
+<CardGroup cols={2}>
+  <Card title="NuGetAuthenticate@v1" icon="key" href="/reference/plugin-nuget-authenticate">
+    Injects NuGet feed credentials into the build environment before generation runs.
+  </Card>
+  <Card title="TestcontainersDinD@v1" icon="docker" href="/reference/plugin-testcontainers-dind">
+    Configures Docker-in-Docker for Testcontainers-based test projects.
+  </Card>
+</CardGroup>
+
+## Execution order
+
+Plugins run in the order they are declared. If you need a plugin to run before another, list it first:
+
+```yaml
+plugins:
+  - NuGetAuthenticate@v1   # runs first
+  - TestcontainersDinD@v1  # runs second
+```
+
+## Full example
+
+```yaml
+version: v1beta
+
+plugins:
+  - TestcontainersDinD@v1
+
+variables:
+  - VERSION
+  - COMMIT
+
+targets:
+  src/dotnet-testcontainers.csproj:
+    type: [build, test]
+    with:
+      base: mcr.microsoft.com/dotnet/sdk:10.0
+```
+
+<CardGroup cols={2}>
+  <Card title="NuGetAuthenticate@v1" icon="key" href="/reference/plugin-nuget-authenticate">
+    Behavior, environment details, and configuration for the NuGet plugin.
+  </Card>
+  <Card title="TestcontainersDinD@v1" icon="docker" href="/reference/plugin-testcontainers-dind">
+    Behavior, environment details, and configuration for the Testcontainers plugin.
+  </Card>
+</CardGroup>

@@ -1,0 +1,90 @@
+---
+title: "Handle dependencies"
+description: "Reuse generated stages inside Dockerfiles using Bake target contexts."
+---
+
+You can make one BuildCharts stage depend on another, even when the stages are implemented in different chart Dockerfiles.
+
+BuildCharts does this through Docker Buildx Bake target contexts. A context maps a name to either:
+- Another Bake target (`target:<name>`)
+- An image (`docker-image://...`)
+
+<Note>
+This page covers stage-to-stage dependencies at build execution time. This is separate from chart dependencies in `charts/buildcharts/Chart.yaml`. For that, see [Charts](/charts).
+</Note>
+
+## Use the default build stage context
+
+For every generated target except `build`, BuildCharts wires a context named `build` to the `build` target automatically:
+
+```hcl
+contexts = {
+  build = "target:build"
+}
+```
+
+That is why chart Dockerfiles can use `build` as an upstream stage:
+
+```dockerfile
+FROM build AS pre-docker
+```
+
+This works because `target:build` refers to the generated Bake target named `build`.
+
+<Info>
+BuildCharts requires exactly one `build` target in `build.yml`, so this `build` context is stable and unambiguous across all generated targets.
+</Info>
+
+## Depend on other targets
+
+Depending on targets other than `build` is currently not configurable in `build.yml`, but you can still do it with Bake overrides at execution time.
+
+Bake supports linking any target to any other target by using `target:<name>` as a context value. Conceptually, this is the wiring you want:
+
+```hcl
+contexts = {
+  build   = "target:build"
+  publish = "target:publish"
+}
+```
+
+Once you expose a target as a context, you can:
+- Inherit from it: `FROM publish`
+- Copy files from it: `COPY --from=publish /path /path`
+
+<Steps>
+  <Step title="Apply the context override at execution time">
+    Because `.buildcharts/docker-bake.hcl` is generated, apply this kind of wiring with a Bake override:
+
+    ```bash
+    docker buildx bake --file .buildcharts/docker-bake.hcl docker --set docker.contexts.publish=target:publish
+    ```
+  </Step>
+  <Step title="Update the chart Dockerfile">
+    Update the relevant chart Dockerfile to use the context:
+
+    ```dockerfile
+    FROM publish
+    # or
+    COPY --from=publish /path /path
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Because `.buildcharts/docker-bake.hcl` is a generated file, do not edit it directly. Apply cross-target context wiring with `--set` overrides at execution time instead.
+</Warning>
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Charts" href="/charts" icon="package">
+    Chart dependencies and alias mapping in `Chart.yaml`.
+  </Card>
+  <Card title="Define build stages" href="/how-to/define-build-stages" icon="layers">
+    How to declare targets and stage types in `build.yml`.
+  </Card>
+  <Card title="Using outputs" href="/how-to/using-outputs" icon="arrow-up-from-bracket">
+    How to capture and consume build artifacts from generated stages.
+  </Card>
+</CardGroup>
